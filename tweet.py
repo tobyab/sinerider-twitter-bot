@@ -1,16 +1,14 @@
-import os
 import base64
 import hashlib
 import os
 import re
 import json
-
-import oauthlib as oauthlib
 import requests
-import redis
-from requests.auth import AuthBase, HTTPBasicAuth
-from requests_oauthlib import OAuth2Session, TokenUpdated
-from flask import Flask, request, redirect, session, url_for, render_template
+from requests_oauthlib import OAuth2Session
+from flask import Flask, request, redirect, session
+from dotenv import load_dotenv
+
+load_dotenv()
 
 r = os.environ["REDIS_URL"]
 client_secret = os.environ["CLIENT_SECRET"]
