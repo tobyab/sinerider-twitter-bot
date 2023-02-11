@@ -4,13 +4,15 @@ import os
 import re
 import json
 import requests
-from requests_oauthlib import OAuth2Session
-from flask import Flask, request, redirect, session
+import redis
+from requests.auth import AuthBase, HTTPBasicAuth
+from requests_oauthlib import OAuth2Session, TokenUpdated
+from flask import Flask, request, redirect, session, url_for, render_template
 from dotenv import load_dotenv
 
 load_dotenv()
 
-r = os.environ["REDIS_URL"]
+r = redis.from_url(os.environ["REDIS_URL"])
 client_secret = os.environ["CLIENT_SECRET"]
 client_id = os.environ["CLIENT_ID"]
 redirect_uri = os.environ.get("REDIRECT_URI")
@@ -76,7 +78,7 @@ def callback():
     st_token = '"{}"'.format(token)
     j_token = json.loads(st_token)
     r.set("token", j_token)
-    doggie_fact = parse_dog_fact()
+    doggie_fact = "Hello, world!"
     payload = {"text": "{}".format(doggie_fact)}
     response = post_tweet(payload, token).json()
     return response
