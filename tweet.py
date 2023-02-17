@@ -5,7 +5,6 @@ import re
 import json
 import requests
 import redis
-from requests.auth import AuthBase, HTTPBasicAuth
 from requests_oauthlib import OAuth2Session, TokenUpdated
 from flask import Flask, request, redirect, session, url_for, render_template
 from dotenv import load_dotenv
@@ -34,12 +33,6 @@ code_challenge = code_challenge.replace("=", "")
 
 def make_token():
     return OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scopes)
-
-
-def parse_dog_fact():
-    url = "http://dog-api.kinduff.com/api/facts"
-    dog_fact = requests.request("GET", url).json()
-    return dog_fact["facts"][0]
 
 
 def post_tweet(payload, token):
@@ -78,8 +71,8 @@ def callback():
     st_token = '"{}"'.format(token)
     j_token = json.loads(st_token)
     r.set("token", j_token)
-    doggie_fact = "Hello, world!"
-    payload = {"text": "{}".format(doggie_fact)}
+    tweet = "Hello, world!"
+    payload = {"text": "{}".format(tweet)}
     response = post_tweet(payload, token).json()
     return response
 
