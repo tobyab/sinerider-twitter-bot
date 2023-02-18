@@ -1,18 +1,29 @@
+import tweepy
+import time
 import os
 from dotenv import load_dotenv
-import redis
-from flask import Flask, request, redirect, session, url_for, render_template
 
 load_dotenv()
 
-r = redis.from_url(os.environ["REDIS_URL"])
-client_secret = os.environ["CLIENT_SECRET"]
-client_id = os.environ["CLIENT_ID"]
-redirect_uri = os.environ.get("REDIRECT_URI")
+auth = tweepy.OAuthHandler(os.environ["API_KEY"], os.environ["API_KEY_SECRET"])
+auth.set_access_token(os.environ["ACCESS_TOKEN"], os.environ["ACCESS_TOKEN_SECRET"])
+api = tweepy.API(auth)
 
-auth_url = "https://twitter.com/i/oauth2/authorize"
-token_url = "https://api.twitter.com/2/oauth2/token"
+bot_id = int(api.verify_credentials().id_str)
+mention_id = 1
+message = "Wahoo! I've submitted your answer!"
 
-app = Flask(__name__)
-app.secret_key = os.urandom(50)
-
+while True:
+    mentions = api.mentions_timeline(since_id=mention_id)
+    for mention in mentions:
+        print("Mention found! Replying to: " + mention.user.screen_name + "mention saying: " + mention.text)
+        mention_id = mention.id
+        if mention.in_reply_to_status_id is None and mention.user.id != bot_id:
+            if True in [word in mention.text.lower() for word in ["answer"]]:
+                try:
+                    print("Replying to: " + mention.user.screen_name + "mention saying:" + mention.text)
+                    api.update_status(status=message, in_reply_to_status_id=mention.id)
+                    print("Success!! Replied to: " + mention.user.screen_name + "mention saying:" + mention.text)
+                except Expection as exc:
+                    print(exc)
+    time.sleep(30)
