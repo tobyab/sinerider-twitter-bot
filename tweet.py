@@ -5,12 +5,16 @@ import re
 import json
 import requests
 import redis
-from requests_oauthlib import OAuth2Session, TokenUpdated
-from flask import Flask, request, redirect, session, url_for, render_template
+from requests_oauthlib import OAuth2Session
+from flask import Flask, request, redirect, session
+from pyairtable import Table
+import airtable as airtable
 from dotenv import load_dotenv
 
 load_dotenv()
 
+airtable_api_key = os.environ["AIRTABLE_API_KEY"]
+airtable_base_id = os.environ["AIRTABLE_BASE_ID"]
 r = redis.from_url(os.environ["REDIS_URL"])
 client_secret = os.environ["CLIENT_SECRET"]
 client_id = os.environ["CLIENT_ID"]
@@ -18,6 +22,7 @@ redirect_uri = os.environ.get("REDIRECT_URI")
 
 auth_url = "https://twitter.com/i/oauth2/authorize"
 token_url = "https://api.twitter.com/2/oauth2/token"
+table = Table(airtable_api_key, airtable_base_id, "Leaderboard")
 
 app = Flask(__name__)
 app.secret_key = os.urandom(50)
@@ -86,17 +91,17 @@ def zapier_replies():
     source = data["source"]
     in_reply_to_status_id_str = data["in_reply_to_status_id_str"]
 
-    # Use Redis to store the data
+    # TODO: find out the actual column names - just mock data for now
+
     tweet = {
         "created_at": created_at,
         "id_str": id_str,
         "full_text": full_text,
-        'source': source,
-        'in_reply_to_status_id_str': in_reply_to_status_id_str,
+        "source": source,
+        "in_reply_to_status_id_str": in_reply_to_status_id_str,
     }
 
-    r.rpush("tweets", json.dumps(tweet))
-
+    # airtable.insert({ tweet })
 
 if __name__ == "__main__":
     app.run()
