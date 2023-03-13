@@ -77,5 +77,26 @@ def callback():
     return response
 
 
+@app.route("/api/zapier-replies", methods=["POST"])
+def zapier_replies():
+    data = request.json
+    created_at = data["created_at"]
+    id_str = data["id_str"]
+    full_text = data["full_text"]
+    source = data["source"]
+    in_reply_to_status_id_str = data["in_reply_to_status_id_str"]
+
+    # Use Redis to store the data
+    tweet = {
+        "created_at": created_at,
+        "id_str": id_str,
+        "full_text": full_text,
+        'source': source,
+        'in_reply_to_status_id_str': in_reply_to_status_id_str,
+    }
+
+    r.rpush("tweets", json.dumps(tweet))
+
+
 if __name__ == "__main__":
     app.run()
