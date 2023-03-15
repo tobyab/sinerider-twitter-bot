@@ -11,6 +11,7 @@ from pyairtable import Table
 import airtable as airtable
 from dotenv import load_dotenv
 
+print("Starting up...");
 load_dotenv()
 
 airtable_api_key = os.environ["AIRTABLE_API_KEY"]
@@ -35,10 +36,8 @@ code_challenge = hashlib.sha256(code_verifier.encode("utf-8")).digest()
 code_challenge = base64.urlsafe_b64encode(code_challenge).decode("utf-8")
 code_challenge = code_challenge.replace("=", "")
 
-
 def make_token():
     return OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scopes)
-
 
 def post_tweet(payload, token):
     print("Tweeting!")
@@ -52,6 +51,9 @@ def post_tweet(payload, token):
         },
     )
 
+@app.route("/status")
+def status():
+    return "Hello, I am online!"
 
 @app.route("/")
 def demo():
@@ -62,7 +64,6 @@ def demo():
     )
     session["oauth_state"] = state
     return redirect(authorization_url)
-
 
 @app.route("/oauth/callback", methods=["GET"])
 def callback():
@@ -80,7 +81,6 @@ def callback():
     payload = {"text": "{}".format(tweet)}
     response = post_tweet(payload, token).json()
     return response
-
 
 @app.route("/api/zapier-replies", methods=["POST"])
 def zapier_replies():
