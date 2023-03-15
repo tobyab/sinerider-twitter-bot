@@ -5,6 +5,7 @@ import os
 from pyairtable import Table
 from dotenv import load_dotenv
 
+print("I am up and running!");
 load_dotenv()
 
 airtable_api_key = os.environ["AIRTABLE_API_KEY"]
