@@ -55,6 +55,12 @@ def post_tweet(payload, token):
 def status():
     return "Hello, I am online!"
 
+@app.route("/test", methods=["POST"])
+def test():
+    for key, value in request.form.items():
+        print("  %s: %s" % (key, value))
+    return "Thanks!"
+
 @app.route("/")
 def demo():
     global twitter
