@@ -11,7 +11,7 @@ from pyairtable import Table
 import airtable as airtable
 from dotenv import load_dotenv
 
-print("Starting up...");
+print("Starting up...")
 load_dotenv()
 
 airtable_api_key = os.environ["AIRTABLE_API_KEY"]
@@ -23,7 +23,9 @@ redirect_uri = os.environ.get("REDIRECT_URI")
 
 auth_url = "https://twitter.com/i/oauth2/authorize"
 token_url = "https://api.twitter.com/2/oauth2/token"
+
 table = Table(airtable_api_key, airtable_base_id, "Leaderboard")
+table.all()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(50)
@@ -97,17 +99,14 @@ def zapier_replies():
     source = data["source"]
     in_reply_to_status_id_str = data["in_reply_to_status_id_str"]
 
-    # TODO: find out the actual column names - just mock data for now
-
     tweet = {
-        "created_at": created_at,
-        "id_str": id_str,
-        "full_text": full_text,
-        "source": source,
-        "in_reply_to_status_id_str": in_reply_to_status_id_str,
+        "expression": "x",
+        "player": "test!",
+        #"source": source,
+        #"in_reply_to_status_id_str": in_reply_to_status_id_str,
     }
 
-    # airtable.insert({ tweet })
+    table.update("", { tweet })
 
 if __name__ == "__main__":
     app.run()
