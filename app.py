@@ -3,12 +3,11 @@ import hashlib
 import os
 import re
 import json
-import requests
 import redis
+import requests
 from requests_oauthlib import OAuth2Session
 from flask import Flask, request, redirect, session
 from pyairtable import Table
-import airtable as airtable
 from dotenv import load_dotenv
 
 print("Starting up...")
@@ -38,8 +37,10 @@ code_challenge = hashlib.sha256(code_verifier.encode("utf-8")).digest()
 code_challenge = base64.urlsafe_b64encode(code_challenge).decode("utf-8")
 code_challenge = code_challenge.replace("=", "")
 
+
 def make_token():
     return OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scopes)
+
 
 def post_tweet(payload, token):
     print("Tweeting!")
@@ -53,15 +54,19 @@ def post_tweet(payload, token):
         },
     )
 
+
 @app.route("/status")
 def status():
     return "Hello, I am online!"
 
+
 @app.route("/test", methods=["POST"])
 def test():
     for key, value in request.form.items():
-        print("  %s: %s" % (key, value))
+        req = request.form.get("full_text", "tweet")
+        print("HELLO!" + req)
     return "Thanks!"
+
 
 @app.route("/")
 def demo():
@@ -72,6 +77,7 @@ def demo():
     )
     session["oauth_state"] = state
     return redirect(authorization_url)
+
 
 @app.route("/oauth/callback", methods=["GET"])
 def callback():
@@ -90,23 +96,16 @@ def callback():
     response = post_tweet(payload, token).json()
     return response
 
-@app.route("/api/zapier-replies", methods=["POST"])
-def zapier_replies():
-    data = request.json
-    created_at = data["created_at"]
-    id_str = data["id_str"]
-    full_text = data["full_text"]
-    source = data["source"]
-    in_reply_to_status_id_str = data["in_reply_to_status_id_str"]
 
-    tweet = {
-        "expression": "x",
-        "player": "test!",
-        #"source": source,
-        #"in_reply_to_status_id_str": in_reply_to_status_id_str,
-    }
+@app.route("/zapier", methods=["POST"])
+def zapier():
+    for key, value in request.form.items():
+        req = request.form.get("full_text", "full_text", "user__screen_name", "user__name", "id")
+        print("HELLO!" + req)
+    return "Thanks!"
 
-    table.update("", { tweet })
+    # table.update("", tweet)
+
 
 if __name__ == "__main__":
     app.run()
