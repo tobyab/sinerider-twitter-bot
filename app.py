@@ -79,6 +79,12 @@ def demo():
     return redirect(authorization_url)
 
 
+def parse_puzzle():
+    url = "https://sinerider-api.herokuapp.com/daily"
+    puzzle = requests.request("GET", url).json()
+    return puzzle["facts"][0]
+
+
 @app.route("/oauth/callback", methods=["GET"])
 def callback():
     code = request.args.get("code")
@@ -91,7 +97,7 @@ def callback():
     st_token = '"{}"'.format(token)
     j_token = json.loads(st_token)
     r.set("token", j_token)
-    tweet = "Hello, world!"
+    tweet = "Woahhhhh! Here's our latest challenge! Check it out here: " + parse_puzzle()
     payload = {"text": "{}".format(tweet)}
     response = post_tweet(payload, token).json()
     return response
