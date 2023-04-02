@@ -9,6 +9,7 @@ from requests_oauthlib import OAuth2Session
 from flask import Flask, request, redirect, session
 from pyairtable import Table
 from dotenv import load_dotenv
+import re
 
 print("Starting up...")
 load_dotenv()
@@ -63,10 +64,14 @@ def status():
 @app.route("/test", methods=["POST"])
 def test():
     for key, value in request.form.items():
-        req = request.form.get("full_text", "tweet")
-        print("HELLO!" + req)
+        twitter_req = request.form.get("full_text", "user__name", "id")
+        print("request: " + twitter_req)
     return "Thanks!"
 
+# answer_unparsed = request.form.get("full_text")
+#        parser = re.search(r'#(\w+)', answer_unparsed)
+#        answer = parser.group(1)
+#        print("answer: " + answer)
 
 @app.route("/")
 def demo():
@@ -106,12 +111,18 @@ def callback():
 @app.route("/zapier", methods=["POST"])
 def zapier():
     for key, value in request.form.items():
-        req = request.form.get("full_text", "full_text", "user__screen_name", "user__name", "id")
-        print("HELLO!" + req)
-    return "Thanks!"
+        req = request.form.get("full_text", "user__name", "id")
 
-    # table.update("", tweet)
+        parse_answer = request.form.get("full_text").split(" #")
+        if len(parse_answer) > 0:
+            answer = parse_answer[0]
+
+    # table.batch_create("", req)
+    return "Thanks!"
 
 
 if __name__ == "__main__":
     app.run()
+
+# twitter_req = request.form.get("full_text", "full_text", "user__name", default=None)
+#        print("req: " + twitter_req)
