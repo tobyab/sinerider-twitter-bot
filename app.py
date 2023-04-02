@@ -57,7 +57,7 @@ def post_tweet(payload, token):
 
 @app.route("/status")
 def status():
-    return "Hello, I am online!"
+    return "Hello, I am online!  Your IP: " + request.remote_addr
 
 
 @app.route("/test", methods=["POST"])
