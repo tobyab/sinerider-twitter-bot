@@ -1,15 +1,14 @@
 import base64
 import hashlib
 import os
-import re
 import json
 import redis
 import requests
+import re
 from requests_oauthlib import OAuth2Session
 from flask import Flask, request, redirect, session
 from pyairtable import Table
 from dotenv import load_dotenv
-import re
 
 print("Starting up...")
 load_dotenv()
@@ -68,10 +67,6 @@ def test():
         print("request: " + twitter_req)
     return "Thanks!"
 
-# answer_unparsed = request.form.get("full_text")
-#        parser = re.search(r'#(\w+)', answer_unparsed)
-#        answer = parser.group(1)
-#        print("answer: " + answer)
 
 @app.route("/")
 def demo():
@@ -111,13 +106,14 @@ def callback():
 @app.route("/zapier", methods=["POST"])
 def zapier():
     for key, value in request.form.items():
-        req = request.form.get("full_text", "user__name", "id")
+        user = request.form.get("user__name")
 
         parse_answer = request.form.get("full_text").split(" #")
         if len(parse_answer) > 0:
             answer = parse_answer[0]
 
-    # table.batch_create("", req)
+            # technically works, but is pretty funky
+    table.create([{"playURL": answer}, {"player": user}])
     return "Thanks!"
 
 
