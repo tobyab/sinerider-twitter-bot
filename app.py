@@ -9,6 +9,7 @@ from requests_oauthlib import OAuth2Session
 from flask import Flask, request, redirect, session
 from pyairtable import Table
 from dotenv import load_dotenv
+from auth import login_required
 
 print("Starting up...")
 load_dotenv()
@@ -56,11 +57,13 @@ def post_tweet(payload, token):
 
 
 @app.route("/status")
+@login_required
 def status():
-    return "Hello, I am online!"
+    return "Hello, I am online!  Your IP: " + request.remote_addr
 
 
 @app.route("/test", methods=["POST"])
+@login_required
 def test():
     for key, value in request.form.items():
         twitter_req = request.form.get("full_text", "user__name", "id")
@@ -69,6 +72,7 @@ def test():
 
 
 @app.route("/")
+@login_required
 def demo():
     global twitter
     twitter = make_token()
@@ -86,6 +90,7 @@ def parse_puzzle():
 
 
 @app.route("/oauth/callback", methods=["GET"])
+@login_required
 def callback():
     code = request.args.get("code")
     token = twitter.fetch_token(
@@ -104,6 +109,7 @@ def callback():
 
 
 @app.route("/zapier", methods=["POST"])
+@login_required
 def zapier():
     for key, value in request.form.items():
         user = request.form.get("user__name")
