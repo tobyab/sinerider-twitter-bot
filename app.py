@@ -118,13 +118,10 @@ def zapier():
         if len(parse_answer) > 0:
             answer = parse_answer[0]
 
-            # technically works, but is pretty funky
-    table.create([{"playURL": answer}, {"player": user}])
+    table.create({"playURL": answer, "player": user})
+
     return "Thanks!"
 
 
 if __name__ == "__main__":
     app.run()
-
-# twitter_req = request.form.get("full_text", "full_text", "user__name", default=None)
-#        print("req: " + twitter_req)
