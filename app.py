@@ -264,9 +264,9 @@ def add_test_data(numTests):
 if "PROC_TYPE" not in os.environ:
     polling.poll(process_work_queue, step=10, poll_forever=True)
     app.run(port=3000, debug=True, use_reloader=False)
-elif os.environ["PROC_TYPE"] is "web":
+elif os.environ["PROC_TYPE"] == "web":
     app.run(port=3000, debug=True, use_reloader=False)
-elif os.environ["PROC_TYPE"] is "worker":
+elif os.environ["PROC_TYPE"] == "worker":
     polling.poll(process_work_queue, step=10, poll_forever=True)
 else:
     print("INVALID WORKER TYPE")
