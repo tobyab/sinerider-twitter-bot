@@ -201,6 +201,7 @@ def process_work_queue():
                 do_scoring(workRow)
             except Exception as e:
                 print("Failed scoring (likely couldn't connect to scoring host) for: %s" % workRow["fields"]["tweetId"])
+                print(e)
         print("Work queue processed!")
     except Exception as e:
         print("Exception: %s" % e)
@@ -259,5 +260,13 @@ def add_test_data(numTests):
     for index in range(numTests):
         queue_work("tweet_id_%d" % random.randint(0, 1000000), "TwitterUser%d" % random.randint(0, 1000000), get_random_level())
 
-polling.poll(process_work_queue, step=10, poll_forever=True)
-app.run(port=3000, debug=True, use_reloader=False)
+
+if "PROC_TYPE" not in os.environ:
+    polling.poll(process_work_queue, step=10, poll_forever=True)
+    app.run(port=3000, debug=True, use_reloader=False)
+elif os.environ["PROC_TYPE"] is "web":
+    app.run(port=3000, debug=True, use_reloader=False)
+elif os.environ["PROC_TYPE"] is "worker":
+    polling.poll(process_work_queue, step=10, poll_forever=True)
+else:
+    print("INVALID WORKER TYPE")
