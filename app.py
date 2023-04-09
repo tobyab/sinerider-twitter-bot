@@ -259,6 +259,8 @@ def add_test_data(numTests):
     for index in range(numTests):
         queue_work("tweet_id_%d" % random.randint(0, 1000000), "TwitterUser%d" % random.randint(0, 1000000), get_random_level())
 
+print("This resolved")
 if __name__ == "__main__":
+    print("Main running")
     polling.poll(process_work_queue, step=10, poll_forever=True)
     app.run(port=3000, debug=True, use_reloader=False)
