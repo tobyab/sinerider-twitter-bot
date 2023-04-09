@@ -1,2 +1,2 @@
-web: gunicorn app:app PROC_TYPE=web
-worker: python app.py PROC_TYPE=worker
+web: PROC_TYPE=web gunicorn app:app
+worker: PROC_TYPE=worker python app.py
