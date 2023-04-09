@@ -179,15 +179,13 @@ def do_scoring(workRow):
     if cachedResult is not None:
         complete_queued_work(recordId)
         notify_user_highscore_already_exists(playerName, tweetId, cachedResult)
-    response = requests.post(url=scoringServiceUrl, json={"level": levelUrl}, verify=False)
+        return
+    response = requests.post(url=scoring_service_uri, json={"level": levelUrl}, verify=False)
     attempts = increment_attempts_queued_work(recordId)
 
     if response.status_code == 200:
         print("Successfully completed work: %s" % recordId)
         add_leaderboard_entry(playerName, json.loads(response.text))
-        complete_queued_work(recordId)
-    elif response.status_code == 408:
-        print("Timed out on work: %s, should post Twitter reply" % recordId)
         complete_queued_work(recordId)
     elif attempts >= 3:
         notify_user_unknown_error(playerName, tweetId)
