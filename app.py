@@ -132,8 +132,11 @@ def get_all_queued_work():
 
 
 def get_cached_result(playURL):
+    print("Trying to get cached result")
     formula = EQUAL(FIELD("playURL"), to_airtable_value(playURL))
+    print("Trying to get cached result #2")
     allRows = leaderboardTable.all(formula=formula)
+    print("Trying to get cached result #3")
     if len(allRows) == 0:
         return None
 
