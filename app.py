@@ -1,125 +1,100 @@
-import base64
-import hashlib
 import os
 import json
 import random
+import sys
+import traceback
 
-import redis
-import re
+import tweepy
 import requests
 import polling
-from requests_oauthlib import OAuth2Session
-from flask import Flask, request, redirect, session
+from flask import Flask, request, redirect
 from pyairtable import Table
 from dotenv import load_dotenv
 from auth import login_required
-from pyairtable.formulas import match, EQUAL, AND, IF, FIELD, to_airtable_value
-import urllib.parse
-
-print("Starting up...")
-load_dotenv()
-
-airtable_api_key = os.environ["AIRTABLE_API_KEY"]
-airtable_base_id = os.environ["AIRTABLE_BASE_ID"]
-r = redis.from_url(os.environ["REDIS_URL"])
-client_secret = os.environ["CLIENT_SECRET"]
-client_id = os.environ["CLIENT_ID"]
-redirect_uri = os.environ.get("REDIRECT_URI")
-scoring_service_uri = os.environ.get("SINERIDER_SCORING_SERVICE")
-
-auth_url = "https://twitter.com/i/oauth2/authorize"
-token_url = "https://api.twitter.com/2/oauth2/token"
-
-workQueueTable = Table(airtable_api_key, airtable_base_id, "TwitterWorkQueue")
-leaderboardTable = Table(airtable_api_key, airtable_base_id, "Leaderboard")
+from pyairtable.formulas import EQUAL, AND, IF, FIELD, to_airtable_value
+import threading
 
 app = Flask(__name__)
 app.secret_key = os.urandom(50)
 
+load_dotenv()
+
+airtable_api_key = os.environ["AIRTABLE_API_KEY"]
+airtable_base_id = os.environ["AIRTABLE_BASE_ID"]
+consumer_secret = os.environ["CONSUMER_SECRET"]
+consumer_key = os.environ["CONSUMER_KEY"]
+redirect_uri = os.environ["REDIRECT_URI"]
+scoring_service_uri = os.environ["SINERIDER_SCORING_SERVICE"]
+
+auth_url = "https://twitter.com/i/oauth2/authorize"
+token_url = "https://api.twitter.com/2/oauth2/token"
 scopes = ["tweet.read", "users.read", "tweet.write", "offline.access"]
 
-code_verifier = base64.urlsafe_b64encode(os.urandom(30)).decode("utf-8")
-code_verifier = re.sub("[^a-zA-Z0-9]+", "", code_verifier)
-code_challenge = hashlib.sha256(code_verifier.encode("utf-8")).digest()
-code_challenge = base64.urlsafe_b64encode(code_challenge).decode("utf-8")
-code_challenge = code_challenge.replace("=", "")
+bearer_token_config_key = "reccSXSMsSnxvFVdM" # note - this is not a secret
+refresh_token_config_key = "reca8u53hlSnNLxTn" # note - this is not a secret
 
-def make_token():
-    return OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scopes)
+workQueueTable = Table(airtable_api_key, airtable_base_id, "TwitterWorkQueue")
+leaderboardTable = Table(airtable_api_key, airtable_base_id, "Leaderboard")
+authTable = Table(airtable_api_key, airtable_base_id, "TwitterAuth")
 
+AUTHORIZE_MANUALLY = False
 
-def post_tweet(payload, token):
-    print("Tweeting!")
-    return requests.request(
-        "POST",
-        "https://api.twitter.com/2/tweets",
-        json=payload,
-        headers={
-            "Authorization": "Bearer {}".format(token["access_token"]),
-            "Content-Type": "application/json",
-        },
+class MyOAuth2UserHandler(tweepy.OAuth2UserHandler):
+    def refresh_token(self, refresh_token):
+        new_token = super().refresh_token(
+                "https://api.twitter.com/2/oauth2/token",
+                refresh_token=refresh_token,
+                body=f"grant_type=refresh_token&client_id={self.client_id}",
+            )
+        return new_token
+
+def get_bearer_token():
+    oauth2_user_handler = tweepy.OAuth2UserHandler(
+        client_id=consumer_key,
+        redirect_uri=redirect_uri,
+        scope=scopes,
+        client_secret=consumer_secret
     )
-
-
-@app.route("/status")
-@login_required
-def status():
-    return "Hello, I am online!  Your IP: " + request.remote_addr
-
-
-@app.route("/test", methods=["POST"])
-@login_required
-def test():
-    for key, value in request.form.items():
-        twitter_req = request.form.get("full_text", "user__name", "id")
-        print("request: " + twitter_req)
-    return "Thanks!"
-
-
-@app.route("/")
-@login_required
-def demo():
-    global twitter
-    twitter = make_token()
-    authorization_url, state = twitter.authorization_url(
-        auth_url, code_challenge=code_challenge, code_challenge_method="S256"
+    authorization_response_url = input("Please navigate to the url: " + oauth2_user_handler.get_authorization_url())
+    access_token = oauth2_user_handler.fetch_token(
+        authorization_response_url
     )
-    session["oauth_state"] = state
-    return redirect(authorization_url)
+    print(access_token)
+    return access_token
 
 
-def parse_puzzle():
-    url = "https://sinerider-api.herokuapp.com/daily"
-    puzzle = requests.request("GET", url).json()
-    return puzzle["facts"][0]
+def set_config(key, value):
+    authTable.update(key, {"value": value})
 
+def post_tweet(bearer_token, msg, response_tweet_id=None):
+    print("Posting tweet with content: %s" % (msg))
+    client = tweepy.Client(bearer_token)
 
-@app.route("/oauth/callback", methods=["GET"])
-@login_required
-def callback():
-    code = request.args.get("code")
-    token = twitter.fetch_token(
-        token_url=token_url,
-        client_secret=client_secret,
-        code_verifier=code_verifier,
-        code=code,
-    )
-    st_token = '"{}"'.format(token)
-    j_token = json.loads(st_token)
-    r.set("token", j_token)
-    tweet = "Woahhhhh! Here's our latest challenge! Check it out here: " + parse_puzzle()
-    payload = {"text": "{}".format(tweet)}
-    response = post_tweet(payload, token).json()
-    return response
-
+    if response_tweet_id is None:
+        return client.create_tweet(text=msg, user_auth=False)
+    else:
+        return client.create_tweet(text=msg, user_auth=False, in_reply_to_tweet_id=response_tweet_id)
 
 @app.route("/onNewTweet", methods=["POST"])
 @login_required
-def onNewTweet():
-    user = request.form.get("user__name")
-    parse_answer = request.form.get("full_text").split(" #")
-    answer = parse_answer[0]
+def on_new_tweet():
+    user_name = request.form.get("user__name")
+    id = request.form.get("id")
+    user_id = request.form.get("user__id")
+    in_reply_to_status_id = request.form.get("in_reply_to_status_id")
 
+    if user_name == "Sinerider bot" or user_id == '1614221762719367168':
+        print("Detected bot tweet, ignoring...")
+        return "We don't respond to bots"
+
+    text_parts = request.form.get("full_text").split("#sinerider ")
+    if len(text_parts) != 2:
+        print("Cannot parse tweet")
+        return "weird!"
+
+    play_url = "https://sinerider.hackclub.dev/?" + text_parts[1]
+
+    queue_work(id, user_name, play_url)
     return "Thanks!"
 
 
@@ -131,14 +106,20 @@ def get_all_queued_work():
     return workQueueTable.all(formula=formula)
 
 
+def get_one_row(table, fieldToMatch, value):
+    formula = EQUAL(FIELD(fieldToMatch), to_airtable_value(value))
+    try:
+        allRows = table.all(formula=formula)
+        if len(allRows) == 0:
+            return None
+
+        return allRows[0]
+    except:
+        print("Shouldn't have happened!")
+        return ""
+
 def get_cached_result(playURL):
-    formula = EQUAL(FIELD("playURL"), to_airtable_value(playURL))
-    allRows = leaderboardTable.all(formula=formula)
-    if len(allRows) == 0:
-        return None
-
-    return allRows[0]
-
+    return get_one_row(leaderboardTable, "playURL", playURL)
 
 def complete_queued_work(recordId):
     workQueueTable.update(recordId, {"completed": True})
@@ -147,11 +128,12 @@ def complete_queued_work(recordId):
 def increment_attempts_queued_work(recordId):
     row = workQueueTable.get(recordId)
     attempts = row["fields"]["attempts"] + 1
-    workQueueTable.update(recordId, {"attempts" : attempts})
+    workQueueTable.update(recordId, {"attempts": attempts})
     return attempts
 
 
 def add_leaderboard_entry(playerName, scoringPayload):
+    print("adding leaderboard entry")
     expression = scoringPayload["expression"]
     gameplayUrl = scoringPayload["gameplay"]
     level = scoringPayload["level"]
@@ -161,11 +143,15 @@ def add_leaderboard_entry(playerName, scoringPayload):
     leaderboardTable.create({"expression": expression, "time":time, "level":level, "playURL": playURL, "charCount":charCount, "player":playerName, "gameplay":gameplayUrl})
 
 def notify_user_unknown_error(playerName, tweetId):
-    print("We should notify user %s of error re: tweet with ID: %s" % (playerName, tweetId))
+    print("Notify user %s of unknown error re: tweet with ID: %s" % (playerName, tweetId))
+    error_message = "Sorry, I encountered an error scoring that submission :("
+    post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweetId)
 
 
 def notify_user_highscore_already_exists(playerName, tweetId, cachedResult):
     print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (playerName, tweetId))
+    error_message = "Sorry, someone already submitted that solution to the leaderboards!"
+    post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweetId)
 
 
 def do_scoring(workRow):
@@ -185,9 +171,21 @@ def do_scoring(workRow):
 
     if response.status_code == 200:
         print("Successfully completed work: %s" % recordId)
-        add_leaderboard_entry(playerName, json.loads(response.text))
+        score_data = json.loads(response.text)
+        add_leaderboard_entry(playerName, score_data)
+
+        try:
+            if "time" not in score_data or score_data["time"] is None:
+                msg = "Sorry, that submission takes longer than 30 seconds to evaluate, and thus is disqualified :("
+                post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweetId)
+            else:
+                msg = "Good job, you made it on the leaderboard for %s with a time of %f and a charCount of %d" % (score_data["level"], score_data["time"], score_data["charCount"])
+                post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweetId)
+        except:
+            print("Error posting tweet response...")
         complete_queued_work(recordId)
     elif attempts >= 3:
+        print("Too many attempts, notifying user of error")
         notify_user_unknown_error(playerName, tweetId)
         complete_queued_work(recordId)
 
@@ -200,8 +198,11 @@ def process_work_queue():
             try:
                 do_scoring(workRow)
             except Exception as e:
+                traceback.print_exc()
                 print("Failed scoring (likely couldn't connect to scoring host) for: %s" % workRow["fields"]["tweetId"])
+                print(e)
         print("Work queue processed!")
+        sys.stdout.flush()
     except Exception as e:
         print("Exception: %s" % e)
 
@@ -259,6 +260,57 @@ def add_test_data(numTests):
     for index in range(numTests):
         queue_work("tweet_id_%d" % random.randint(0, 1000000), "TwitterUser%d" % random.randint(0, 1000000), get_random_level())
 
-if __name__ == "__main__":
+def get_config(key, default):
+    res = authTable.get(key)
+    if "value" in res["fields"]:
+        return res["fields"]["value"]
+    else:
+        return default
+
+
+def refresh_auth_token():
+    refresh_token = get_config(refresh_token_config_key, "<null>")
+    auth = MyOAuth2UserHandler(
+        client_id=consumer_key,
+        redirect_uri=redirect_uri,
+        scope=scopes,
+        client_secret=consumer_secret
+    )
+    fullToken = auth.refresh_token(refresh_token)
+    set_config(bearer_token_config_key, fullToken["access_token"])
+    set_config(refresh_token_config_key, fullToken["refresh_token"])
+    print("refreshed twitter, auth token - should have 2 more hours")
+
+def run_server():
+    app.run(port=8080, debug=True, use_reloader=False)
+
+def run_polling():
     polling.poll(process_work_queue, step=10, poll_forever=True)
-    app.run(port=3000, debug=True, use_reloader=False)
+
+def refresh_token_polling():
+    polling.poll(refresh_auth_token, step=5*60, poll_forever=True)
+
+def get_auth_token():
+    if AUTHORIZE_MANUALLY:
+        fullToken = get_bearer_token()
+        set_config(bearer_token_config_key, fullToken["access_token"])
+        set_config(refresh_token_config_key, fullToken["refresh_token"])
+        return
+    else:
+        return get_config(bearer_token_config_key, "<null>")
+
+if "PROC_TYPE" not in os.environ:
+    print("PROC_TYPE=null (probably running locally)")
+    threading.Thread(target=run_server).start()
+    threading.Thread(target=run_polling).start()
+    threading.Thread(target=refresh_token_polling).start()
+elif os.environ["PROC_TYPE"] == "web":
+    print("PROC_TYPE=web, starting server...")
+    threading.Thread(target=run_server).start()
+elif os.environ["PROC_TYPE"] == "worker":
+    print("PROC_TYPE=worker, starting polling...")
+    threading.Thread(target=run_polling).start()
+    threading.Thread(target=refresh_token_polling).start()
+else:
+    print("INVALID WORKER TYPE")
+
