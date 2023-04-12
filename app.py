@@ -100,7 +100,7 @@ def on_new_tweet():
         return "weird!"
 
     puzzle_id = parts[0]
-    expression = parts[2]
+    expression = "".join(parts[2].split()) # Remove all whitespace from expression
 
     if validate_puzzle_id(puzzle_id) == False:
         print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (user_name, id))
