@@ -179,7 +179,7 @@ def do_scoring(workRow):
                 msg = "Sorry, that submission takes longer than 30 seconds to evaluate, and thus is disqualified :("
                 post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweetId)
             else:
-                msg = "Good job, you made it on the leaderboard for %s with a time of %f and a charCount of %d" % (score_data["level"], score_data["time"], score_data["charCount"])
+                msg = "Good job, you made it on the leaderboard for %s with a time of %f and a charCount of %d.  Check out this video of your run: %s" % (score_data["level"], score_data["time"], score_data["charCount"], score_data["gameplay"])
                 post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweetId)
         except:
             print("Error posting tweet response...")
