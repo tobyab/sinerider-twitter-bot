@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from auth import login_required
 from pyairtable.formulas import EQUAL, AND, IF, FIELD, to_airtable_value
 import threading
+import lzstring
 
 app = Flask(__name__)
 app.secret_key = os.urandom(50)
@@ -36,6 +37,7 @@ refresh_token_config_key = "reca8u53hlSnNLxTn" # note - this is not a secret
 workQueueTable = Table(airtable_api_key, airtable_base_id, "TwitterWorkQueue")
 leaderboardTable = Table(airtable_api_key, airtable_base_id, "Leaderboard")
 authTable = Table(airtable_api_key, airtable_base_id, "TwitterAuth")
+puzzleTable = Table(airtable_api_key, airtable_base_id, "Puzzles")
 
 AUTHORIZE_MANUALLY = False
 
@@ -79,11 +81,10 @@ def post_tweet(bearer_token, msg, response_tweet_id=None):
 @login_required
 def on_new_tweet():
     user_name = request.form.get("user__name")
-    id = request.form.get("id")
-    user_id = request.form.get("user__id")
-    in_reply_to_status_id = request.form.get("in_reply_to_status_id")
+    tweet_id = request.form.get("id")
+    twitter_user_id = request.form.get("user__id")
 
-    if user_name == "Sinerider bot" or user_id == '1614221762719367168':
+    if user_name == "Sinerider bot" or twitter_user_id == '1614221762719367168':
         print("Detected bot tweet, ignoring...")
         return "We don't respond to bots"
 
@@ -92,14 +93,38 @@ def on_new_tweet():
         print("Cannot parse tweet")
         return "weird!"
 
-    play_url = "https://sinerider.hackclub.dev/?" + text_parts[1]
+    full_submission = text_parts[1]
+    parts = full_submission.partition(' ')
+    if len(parts[1]) == 0 or len(parts[2]) == 0:
+        print("Cannot parse tweet")
+        return "weird!"
 
-    queue_work(id, user_name, play_url)
+    puzzle_id = parts[0]
+    expression = parts[2]
+
+    if validate_puzzle_id(puzzle_id) == False:
+        print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (user_name, id))
+        error_message = "Sorry, I don't know what puzzle you're talking about..."
+        post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweet_id)
+        return "weird!"
+
+    queue_work(tweet_id, user_name, puzzle_id, expression)
     return "Thanks!"
 
+def validate_puzzle_id(puzzle_id):
+    # Note - we need to ensure the puzzle exists...
+    try:
+        puzzle = get_one_row(puzzleTable, "id", puzzle_id)
+        if puzzle is not None:
+            return True
+    except:
+        print("error validating puzzle id, probably failed to query airtable")
+    return False
 
-def queue_work(tweetId, twitterHandle, playURL):
-    workQueueTable.create({"tweetId": tweetId, "twitterHandle": twitterHandle, "playURL":playURL, "completed": False, "attempts": 0 })
+
+def queue_work(tweetId, twitterHandle, puzzleId, expression):
+    workQueueTable.create({"tweetId": tweetId, "twitterHandle": twitterHandle, "puzzleId":puzzleId, "expression":expression, "completed": False, "attempts": 0})
+
 
 def get_all_queued_work():
     formula = AND(EQUAL(FIELD("completed"), to_airtable_value(0)), IF("{attempts} < 3", 1, 0))
@@ -109,26 +134,25 @@ def get_all_queued_work():
 def get_one_row(table, fieldToMatch, value):
     formula = EQUAL(FIELD(fieldToMatch), to_airtable_value(value))
     try:
-        allRows = table.all(formula=formula)
-        if len(allRows) == 0:
+        all_rows = table.all(formula=formula)
+        if len(all_rows) == 0:
             return None
 
-        return allRows[0]
+        return all_rows[0]
     except:
         print("Shouldn't have happened!")
         return ""
 
-def get_cached_result(playURL):
-    return get_one_row(leaderboardTable, "playURL", playURL)
 
-def complete_queued_work(recordId):
-    workQueueTable.update(recordId, {"completed": True})
+def complete_queued_work(tweet_id):
+    row = get_one_row(workQueueTable, "tweetId", tweet_id)
+    workQueueTable.update(row["id"], {"completed": True})
 
 
-def increment_attempts_queued_work(recordId):
-    row = workQueueTable.get(recordId)
+def increment_attempts_queued_work(tweet_id):
+    row = get_one_row(workQueueTable, "tweetId", tweet_id)
     attempts = row["fields"]["attempts"] + 1
-    workQueueTable.update(recordId, {"attempts": attempts})
+    workQueueTable.update(row["id"], {"attempts": attempts})
     return attempts
 
 
@@ -154,40 +178,77 @@ def notify_user_highscore_already_exists(playerName, tweetId, cachedResult):
     post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweetId)
 
 
-def do_scoring(workRow):
-    recordId = workRow["id"]
-    levelUrl = workRow["fields"]["playURL"]
-    playerName = workRow["fields"]["twitterHandle"]
-    tweetId = workRow["fields"]["tweetId"]
-    print("Scoring for player: %s" % playerName)
+def notify_user_invalid_puzzle(player_name, tweet_id):
+    print("We should notify user %s of invalid puzzle on tweet with ID: %s" % (player_name, tweet_id))
+    error_message = "I'm terribly sorry, but I'm not aware of a puzzle with that name!"
+    post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweet_id)
 
-    cachedResult = get_cached_result(levelUrl)
-    if cachedResult is not None:
-        complete_queued_work(recordId)
-        notify_user_highscore_already_exists(playerName, tweetId, cachedResult)
+
+def do_scoring(workRow):
+    # Note - we need to load the puzzle URL from the Puzzles table
+    puzzle_id = workRow["fields"]["puzzleId"]
+    expression = workRow["fields"]["expression"]
+    player_name = workRow["fields"]["twitterHandle"]
+    tweet_id = workRow["fields"]["tweetId"]
+    print("Scoring for player: %s" % player_name)
+
+    caching_key = "%s %s" % (puzzle_id, expression)
+    puzzle_data = get_one_row(puzzleTable, "id", puzzle_id)
+
+    # Validate that the puzzle exists
+    if puzzle_data is None:
+        complete_queued_work(tweet_id)
+        notify_user_invalid_puzzle(player_name, tweet_id)
         return
-    response = requests.post(url=scoring_service_uri, json={"level": levelUrl}, verify=False)
-    attempts = increment_attempts_queued_work(recordId)
+
+    # Construct the proper level URL based on the puzzle id + expression by using the puzzle data URL
+    # and decoding its contents, and then inserting the expression into it
+    puzzle_url = puzzle_data["fields"]["puzzleURL"]
+    url_parts = puzzle_url.partition("?")
+    url_prefix = url_parts[0]
+    lzstr_base64_encoded_data = url_parts[2]
+    lztranscoder = lzstring.LZString()
+    exploded_puzzle_data = json.loads(lztranscoder.decompressFromBase64(lzstr_base64_encoded_data))
+    exploded_puzzle_data["expressionOverride"] = expression
+
+    # test code
+    #url_prefix = "http://localhost:5500"
+    # test code
+    
+    submission_url = url_prefix + "?" + lztranscoder.compressToBase64(json.dumps(exploded_puzzle_data))
+
+    print("Using submission URL: " + submission_url)
+
+    # See if we have already scored this submission
+    cached_result = get_one_row(leaderboardTable, "playURL", submission_url)
+    if cached_result is not None:
+        complete_queued_work(tweet_id)
+        notify_user_highscore_already_exists(player_name, tweet_id, cached_result)
+        return
+
+    # Do the work of scoring
+    attempts = increment_attempts_queued_work(tweet_id)
+    response = requests.post(url=scoring_service_uri, json={"level": submission_url}, verify=False)
 
     if response.status_code == 200:
-        print("Successfully completed work: %s" % recordId)
+        print("Successfully completed work: %s" % tweet_id)
         score_data = json.loads(response.text)
-        add_leaderboard_entry(playerName, score_data)
+        add_leaderboard_entry(player_name, score_data)
 
         try:
             if "time" not in score_data or score_data["time"] is None:
                 msg = "Sorry, that submission takes longer than 30 seconds to evaluate, and thus is disqualified :("
-                post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweetId)
+                post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweet_id)
             else:
                 msg = "Good job, you made it on the leaderboard for %s with a time of %f and a charCount of %d.  Check out this video of your run: %s" % (score_data["level"], score_data["time"], score_data["charCount"], score_data["gameplay"])
-                post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweetId)
+                post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweet_id)
         except:
             print("Error posting tweet response...")
-        complete_queued_work(recordId)
+        complete_queued_work(tweet_id)
     elif attempts >= 3:
         print("Too many attempts, notifying user of error")
-        notify_user_unknown_error(playerName, tweetId)
-        complete_queued_work(recordId)
+        notify_user_unknown_error(player_name, tweet_id)
+        complete_queued_work(tweet_id)
 
 
 def process_work_queue():
@@ -201,10 +262,11 @@ def process_work_queue():
                 traceback.print_exc()
                 print("Failed scoring (likely couldn't connect to scoring host) for: %s" % workRow["fields"]["tweetId"])
                 print(e)
-        print("Work queue processed!")
-        sys.stdout.flush()
     except Exception as e:
         print("Exception: %s" % e)
+    print("Work queue end")
+    sys.stdout.flush()
+
 
 def get_random_level():
     randomLevels = [
