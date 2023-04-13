@@ -37,7 +37,7 @@ refresh_token_config_key = "reca8u53hlSnNLxTn" # note - this is not a secret
 
 workQueueTable = Table(airtable_api_key, airtable_base_id, "TwitterWorkQueue")
 leaderboardTable = Table(airtable_api_key, airtable_base_id, "Leaderboard")
-authTable = Table(airtable_api_key, airtable_base_id, "TwitterAuth")
+configTable = Table(airtable_api_key, airtable_base_id, "Config")
 puzzleTable = Table(airtable_api_key, airtable_base_id, "Puzzles")
 
 AUTHORIZE_MANUALLY = False
@@ -69,7 +69,7 @@ def get_bearer_token():
 
 
 def set_config(key, value):
-    authTable.update(key, {"value": value})
+    configTable.update(key, {"value": value})
 
 
 def post_tweet(bearer_token, msg, response_tweet_id=None):
@@ -335,7 +335,7 @@ def add_test_data(numTests):
         queue_work("tweet_id_%d" % random.randint(0, 1000000), "TwitterUser%d" % random.randint(0, 1000000), get_random_level())
 
 def get_config(key, default):
-    res = authTable.get(key)
+    res = configTable.get(key)
     if "value" in res["fields"]:
         return res["fields"]["value"]
     else:
