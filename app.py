@@ -90,7 +90,8 @@ def post_tweet(bearer_token, msg, response_tweet_id=None):
 def on_publish_puzzle():
     publish_info = request.args.get("publishingInfo")
     lztranscoder = lzstring.LZString()
-    exploded_publish_info = json.loads(lztranscoder.decompressFromBase64(publish_info))
+    json_str = lztranscoder.decompressFromBase64(publish_info)
+    exploded_publish_info = json.loads(json_str)
     puzzle_id = exploded_publish_info["id"]
     puzzle_title = exploded_publish_info["puzzleTitle"]
     puzzle_description = exploded_publish_info["puzzleDescription"]
