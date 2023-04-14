@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import re
 import sys
 import traceback
 
@@ -41,6 +42,7 @@ puzzleTable = Table(airtable_api_key, airtable_base_id, "Puzzles")
 
 AUTHORIZE_MANUALLY = False
 
+
 class MyOAuth2UserHandler(tweepy.OAuth2UserHandler):
     def refresh_token(self, refresh_token):
         new_token = super().refresh_token(
@@ -49,6 +51,7 @@ class MyOAuth2UserHandler(tweepy.OAuth2UserHandler):
                 body=f"grant_type=refresh_token&client_id={self.client_id}",
             )
         return new_token
+
 
 def get_bearer_token():
     oauth2_user_handler = tweepy.OAuth2UserHandler(
@@ -68,6 +71,7 @@ def get_bearer_token():
 def set_config(key, value):
     authTable.update(key, {"value": value})
 
+
 def post_tweet(bearer_token, msg, response_tweet_id=None):
     print("Posting tweet with content: %s" % (msg))
     client = tweepy.Client(bearer_token)
@@ -76,6 +80,7 @@ def post_tweet(bearer_token, msg, response_tweet_id=None):
         return client.create_tweet(text=msg, user_auth=False)
     else:
         return client.create_tweet(text=msg, user_auth=False, in_reply_to_tweet_id=response_tweet_id)
+
 
 @app.route("/onNewTweet", methods=["POST"])
 @login_required
@@ -100,7 +105,15 @@ def on_new_tweet():
         return "weird!"
 
     puzzle_id = parts[0]
-    expression = "".join(parts[2].split()) # Remove all whitespace from expression
+
+    equation_pattern = r"^([\w\^*+/\-()]+)"
+    expression_match = re.search(equation_pattern, parts[2])
+
+    if expression_match:
+        expression = expression_match.group(1)
+    else:
+        print("Cannot parse tweet")
+        return "weird!"
 
     if validate_puzzle_id(puzzle_id) == False:
         print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (user_name, id))
@@ -109,7 +122,9 @@ def on_new_tweet():
         return "weird!"
 
     queue_work(tweet_id, user_name, puzzle_id, expression)
+
     return "Thanks!"
+
 
 def validate_puzzle_id(puzzle_id):
     # Note - we need to ensure the puzzle exists...
@@ -166,6 +181,7 @@ def add_leaderboard_entry(playerName, scoringPayload):
     time = scoringPayload["time"]
     leaderboardTable.create({"expression": expression, "time":time, "level":level, "playURL": playURL, "charCount":charCount, "player":playerName, "gameplay":gameplayUrl})
 
+
 def notify_user_unknown_error(playerName, tweetId):
     print("Notify user %s of unknown error re: tweet with ID: %s" % (playerName, tweetId))
     error_message = "Sorry, I encountered an error scoring that submission :("
@@ -174,7 +190,7 @@ def notify_user_unknown_error(playerName, tweetId):
 
 def notify_user_highscore_already_exists(playerName, tweetId, cachedResult):
     print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (playerName, tweetId))
-    error_message = "Sorry, someone already submitted that solution to the leaderboards!"
+    error_message = "Sorry, someone's already submitted that solution to the leaderboards — try again with a different answer!"
     post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweetId)
 
 
@@ -211,8 +227,15 @@ def do_scoring(workRow):
     exploded_puzzle_data = json.loads(lztranscoder.decompressFromBase64(lzstr_base64_encoded_data))
     exploded_puzzle_data["expressionOverride"] = expression
 
+    responses = [
+        "Grooooovy! You're on the leaderboard for %s with a time of %f (speedy!!) and a character count of %d! Also, we made you an *awesome* video of your run: %s!",
+        "Woohoo!! You're on the leaderboard for %s with a time of %f (vroom vroom!) and a character count of %d! Check out this super cool video of your run: %s!",
+        "🥳🥳🥳 You're on the %s leaderboard with a super speedy time of %f and a character count of %d! We even made this groovy video of your run: %s!",
+        "Cowabunga! You've made it onto the %s leaderboard! You got an unbelievably fast time of %f (WOW!) and a character count of %d! There's even a super cool video of your run: %s!",
+    ]
+
     # test code
-    #url_prefix = "http://localhost:5500"
+    # url_prefix = "http://localhost:5500"
     # test code
     
     submission_url = url_prefix + "?" + lztranscoder.compressToBase64(json.dumps(exploded_puzzle_data))
@@ -237,10 +260,10 @@ def do_scoring(workRow):
 
         try:
             if "time" not in score_data or score_data["time"] is None:
-                msg = "Sorry, that submission takes longer than 30 seconds to evaluate, and thus is disqualified :("
+                msg = "Sorry, that submission takes longer than 30 seconds to evaluate, so we had to disqualify it. :( Try again with a new solution!"
                 post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweet_id)
             else:
-                msg = "Good job, you made it on the leaderboard for %s with a time of %f and a charCount of %d.  Check out this video of your run: %s" % (score_data["level"], score_data["time"], score_data["charCount"], score_data["gameplay"])
+                msg = random.choice(responses) % (score_data["level"], score_data["time"], score_data["charCount"], score_data["gameplay"])
                 post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweet_id)
         except:
             print("Error posting tweet response...")
@@ -343,14 +366,18 @@ def refresh_auth_token():
     set_config(refresh_token_config_key, fullToken["refresh_token"])
     print("refreshed twitter, auth token - should have 2 more hours")
 
+
 def run_server():
     app.run(port=8080, debug=True, use_reloader=False)
+
 
 def run_polling():
     polling.poll(process_work_queue, step=10, poll_forever=True)
 
+
 def refresh_token_polling():
     polling.poll(refresh_auth_token, step=5*60, poll_forever=True)
+
 
 def get_auth_token():
     if AUTHORIZE_MANUALLY:
@@ -360,6 +387,7 @@ def get_auth_token():
         return
     else:
         return get_config(bearer_token_config_key, "<null>")
+
 
 if "PROC_TYPE" not in os.environ:
     print("PROC_TYPE=null (probably running locally)")
@@ -375,4 +403,3 @@ elif os.environ["PROC_TYPE"] == "worker":
     threading.Thread(target=refresh_token_polling).start()
 else:
     print("INVALID WORKER TYPE")
-
