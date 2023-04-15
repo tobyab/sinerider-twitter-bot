@@ -93,35 +93,24 @@ def on_new_tweet():
         print("Detected bot tweet, ignoring...")
         return "We don't respond to bots"
 
-    text_parts = request.form.get("full_text").split("#sinerider ")
-    if len(text_parts) != 2:
-        print("Cannot parse tweet")
-        return "weird!"
+    match = re.search(r"#sinerider\s(?P<puzzle_id>puzzle_\d+)\s(?P<equation>.*)", request.form.get("full_text"))
+    if match:
+        puzzle_number = match.group("puzzle_id")
+        equation = match.group("equation")
+        print("puzzle: ", puzzle_number)
+        print("equation: ", equation)
 
-    full_submission = text_parts[1]
-    parts = full_submission.partition(' ')
-    if len(parts[1]) == 0 or len(parts[2]) == 0:
-        print("Cannot parse tweet")
-        return "weird!"
-
-    puzzle_id = parts[0]
-
-    equation_pattern = r"^([\w\^*+/\-()]+)"
-    expression_match = re.search(equation_pattern, parts[2])
-
-    if expression_match:
-        expression = expression_match.group(1)
     else:
         print("Cannot parse tweet")
-        return "weird!"
+        return "We can't parse this tweet!"
 
-    if validate_puzzle_id(puzzle_id) == False:
+    if validate_puzzle_id(puzzle_number) == False:
         print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (user_name, id))
         error_message = "Sorry, I don't know what puzzle you're talking about..."
         post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweet_id)
         return "weird!"
 
-    queue_work(tweet_id, user_name, puzzle_id, expression)
+    queue_work(tweet_id, user_name, puzzle_number, equation)
 
     return "Thanks!"
 
