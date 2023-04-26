@@ -8,7 +8,7 @@ import traceback
 import tweepy
 import requests
 import polling
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, Response
 from pyairtable import Table
 from dotenv import load_dotenv
 from auth import login_required
@@ -37,7 +37,7 @@ refresh_token_config_key = "reca8u53hlSnNLxTn" # note - this is not a secret
 
 workQueueTable = Table(airtable_api_key, airtable_base_id, "TwitterWorkQueue")
 leaderboardTable = Table(airtable_api_key, airtable_base_id, "Leaderboard")
-authTable = Table(airtable_api_key, airtable_base_id, "TwitterAuth")
+configTable = Table(airtable_api_key, airtable_base_id, "Config")
 puzzleTable = Table(airtable_api_key, airtable_base_id, "Puzzles")
 
 AUTHORIZE_MANUALLY = False
@@ -69,7 +69,11 @@ def get_bearer_token():
 
 
 def set_config(key, value):
-    authTable.update(key, {"value": value})
+    existing_config = get_one_row(configTable, "config_name", key)
+    if existing_config is None:
+        configTable.create({"config_name": key, "value":value})
+    else:
+        configTable.update(existing_config["id"], {"value": value})
 
 
 def post_tweet(bearer_token, msg, response_tweet_id=None):
@@ -80,6 +84,33 @@ def post_tweet(bearer_token, msg, response_tweet_id=None):
         return client.create_tweet(text=msg, user_auth=False)
     else:
         return client.create_tweet(text=msg, user_auth=False, in_reply_to_tweet_id=response_tweet_id)
+
+@app.route("/publishPuzzle", methods=["POST"])
+@login_required
+def on_publish_puzzle():
+    publish_info = request.args.get("publishingInfo")
+    lztranscoder = lzstring.LZString()
+    json_str = lztranscoder.decompressFromBase64(publish_info)
+    exploded_publish_info = json.loads(json_str)
+    puzzle_id = exploded_publish_info["id"]
+    puzzle_title = exploded_publish_info["puzzleTitle"]
+    puzzle_description = exploded_publish_info["puzzleDescription"]
+    puzzle_url = exploded_publish_info["puzzleURL"]
+
+    puzzle_post_text = "%s - %s %s" % (puzzle_title, puzzle_description, puzzle_url)
+    print("Publishing puzzle on twitter: %s" % (puzzle_post_text))
+
+    try:
+        response = post_tweet(get_config("bearer_token", "<unknown>"), puzzle_post_text)
+        tweet_id = response.data["id"]
+        print("Successfully published puzzle (tweet id: %s)" % (tweet_id))
+        set_config("twitter_%s" % (puzzle_id), tweet_id)
+        return Response(status=200)
+    except Exception as e:
+        error_message = str(e).replace('\n', ' ').replace('\r', '')
+        print("Failed to publish puzzle: message=%s" % (error_message))
+        resp = Response("{'message':'%s'}" % error_message, status=500, mimetype='application/json')
+        return resp
 
 
 @app.route("/onNewTweet", methods=["POST"])
@@ -174,19 +205,19 @@ def add_leaderboard_entry(playerName, scoringPayload):
 def notify_user_unknown_error(playerName, tweetId):
     print("Notify user %s of unknown error re: tweet with ID: %s" % (playerName, tweetId))
     error_message = "Sorry, I encountered an error scoring that submission :("
-    post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweetId)
+    post_tweet(get_config("bearer_token", "<unknown>"), error_message, tweetId)
 
 
 def notify_user_highscore_already_exists(playerName, tweetId, cachedResult):
     print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (playerName, tweetId))
     error_message = "Sorry, someone's already submitted that solution to the leaderboards — try again with a different answer!"
-    post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweetId)
+    post_tweet(get_config("bearer_token", "<unknown>"), error_message, tweetId)
 
 
 def notify_user_invalid_puzzle(player_name, tweet_id):
     print("We should notify user %s of invalid puzzle on tweet with ID: %s" % (player_name, tweet_id))
     error_message = "I'm terribly sorry, but I'm not aware of a puzzle with that name!"
-    post_tweet(get_config(bearer_token_config_key, "<unknown>"), error_message, tweet_id)
+    post_tweet(get_config("bearer_token", "<unknown>"), error_message, tweet_id)
 
 
 def do_scoring(workRow):
@@ -250,10 +281,10 @@ def do_scoring(workRow):
         try:
             if "time" not in score_data or score_data["time"] is None:
                 msg = "Sorry, that submission takes longer than 30 seconds to evaluate, so we had to disqualify it. :( Try again with a new solution!"
-                post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweet_id)
+                post_tweet(get_config("bearer_token", "<unknown>"), msg, tweet_id)
             else:
                 msg = random.choice(responses) % (score_data["level"], score_data["time"], score_data["charCount"], score_data["gameplay"])
-                post_tweet(get_config(bearer_token_config_key, "<unknown>"), msg, tweet_id)
+                post_tweet(get_config("bearer_token", "<unknown>"), msg, tweet_id)
         except:
             print("Error posting tweet response...")
         complete_queued_work(tweet_id)
@@ -334,16 +365,19 @@ def add_test_data(numTests):
     for index in range(numTests):
         queue_work("tweet_id_%d" % random.randint(0, 1000000), "TwitterUser%d" % random.randint(0, 1000000), get_random_level())
 
+def get_config_id(key):
+    return get_one_row(configTable, key, None) is not None
+
+
 def get_config(key, default):
-    res = authTable.get(key)
-    if "value" in res["fields"]:
-        return res["fields"]["value"]
-    else:
+    val = get_one_row(configTable, "config_name", key)
+    if val is None:
         return default
+    return val["fields"]["value"]
 
 
 def refresh_auth_token():
-    refresh_token = get_config(refresh_token_config_key, "<null>")
+    refresh_token = get_config("refresh_token", "<null>")
     auth = MyOAuth2UserHandler(
         client_id=consumer_key,
         redirect_uri=redirect_uri,
@@ -351,8 +385,8 @@ def refresh_auth_token():
         client_secret=consumer_secret
     )
     fullToken = auth.refresh_token(refresh_token)
-    set_config(bearer_token_config_key, fullToken["access_token"])
-    set_config(refresh_token_config_key, fullToken["refresh_token"])
+    set_config("bearer_token", fullToken["access_token"])
+    set_config("refresh_token", fullToken["refresh_token"])
     print("refreshed twitter, auth token - should have 2 more hours")
 
 
@@ -371,11 +405,14 @@ def refresh_token_polling():
 def get_auth_token():
     if AUTHORIZE_MANUALLY:
         fullToken = get_bearer_token()
-        set_config(bearer_token_config_key, fullToken["access_token"])
-        set_config(refresh_token_config_key, fullToken["refresh_token"])
+        set_config("bearer_token", fullToken["access_token"])
+        set_config("refresh_token", fullToken["refresh_token"])
         return
     else:
-        return get_config(bearer_token_config_key, "<null>")
+        return get_config("bearer_token", "<null>")
+
+if AUTHORIZE_MANUALLY:
+    get_auth_token()
 
 
 if "PROC_TYPE" not in os.environ:
