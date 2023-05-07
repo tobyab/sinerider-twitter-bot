@@ -35,8 +35,6 @@ v20_scopes = ["tweet.read", "users.read", "tweet.write", "offline.access"]
 redirect_uri = os.environ["REDIRECT_URI"]
 scoring_service_uri = os.environ["SINERIDER_SCORING_SERVICE"]
 
-social_card_img_url = os.environ["SOCIAL_CARD_IMG_URL"]
-
 workQueueTable = Table(airtable_api_key, airtable_base_id, "TwitterWorkQueue")
 leaderboardTable = Table(airtable_api_key, airtable_base_id, "Leaderboard")
 configTable = Table(airtable_api_key, airtable_base_id, "Config")
@@ -84,8 +82,7 @@ def on_publish_puzzle():
     print("Publishing puzzle on twitter: %s" % (puzzle_post_text))
 
     try:
-
-        response = post_tweet(puzzle_post_text, upload_media_to_twitter(social_card_img_url, "image/png"))
+        response = post_tweet(puzzle_post_text)
         tweet_id = response.data["id"]
         print("Successfully published puzzle (tweet id: %s)" % (tweet_id))
         set_config("twitter_%s" % (puzzle_id), tweet_id)
