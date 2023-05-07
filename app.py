@@ -117,7 +117,7 @@ def on_new_tweet():
         return "We can't parse this tweet!"
 
     if validate_puzzle_id(puzzle_number) == False:
-        print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (user_name, id))
+        print("We should notify user %s of invalid puzzle id re: tweet with ID: %s" % (user_name, id))
         error_message = "Sorry, I don't know what puzzle you're talking about..."
         post_tweet(error_message, tweet_id)
         return "weird!"
@@ -192,7 +192,13 @@ def notify_user_unknown_error(playerName, tweetId):
 def notify_user_highscore_already_exists(playerName, tweetId, cachedResult):
     print("We should notify user %s of duplicate high score re: tweet with ID: %s" % (playerName, tweetId))
     error_message = "Sorry, someone's already submitted that solution to the leaderboards — try again with a different answer!"
-    post_tweet(error_message, tweetId)
+    media = None
+    if "fields" in cachedResult and "gameplay" in cachedResult["fields"] and len(cachedResult["fields"]["gameplay"]) > 0:
+        try:
+            media = upload_media_to_twitter(cachedResult["fields"]["gameplay"], "video/mp4")
+        except Exception as e:
+            media = None
+    post_tweet(error_message, tweetId, media)
 
 
 def notify_user_invalid_puzzle(player_name, tweet_id):
@@ -209,7 +215,8 @@ def upload_media_to_twitter(media_url, file_type):
         file.write(r.content)
         file.flush()
         file.close()
-        return [get_twitter_v11().chunked_upload(filename, file_type=file_type, additional_owners=[1614221762719367168])]
+        media = get_twitter_v11().chunked_upload(filename, file_type=file_type, additional_owners=[1614221762719367168])
+        return [media.media_id_string]
     except Exception as e:
         print(e)
     finally:
@@ -283,7 +290,7 @@ def do_scoring(workRow):
             else:
                 msg = random.choice(responses) % (score_data["level"], score_data["time"], score_data["charCount"])
                 post_tweet(msg, tweet_id, upload_media_to_twitter(score_data["gameplay"], "video/mp4"))
-        except:
+        except Exception as e:
             print("Error posting tweet response...")
         complete_queued_work(tweet_id)
     elif attempts >= 3:
