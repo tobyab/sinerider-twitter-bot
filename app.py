@@ -34,12 +34,12 @@ v20_scopes = ["tweet.read", "users.read", "tweet.write", "offline.access"]
 
 redirect_uri = os.environ["REDIRECT_URI"]
 scoring_service_uri = os.environ["SINERIDER_SCORING_SERVICE"]
+leaderboard_uri = os.environ["LEADERBOARD_URI"]
 
 workQueueTable = Table(airtable_api_key, airtable_base_id, "TwitterWorkQueue")
 leaderboardTable = Table(airtable_api_key, airtable_base_id, "Leaderboard")
 configTable = Table(airtable_api_key, airtable_base_id, "Config")
 puzzleTable = Table(airtable_api_key, airtable_base_id, "Puzzles")
-
 AUTHORIZE_MANUALLY = False
 
 twitter_v11_api = tweepy.API(tweepy.OAuth1UserHandler(v11_consumer_key, v11_consumer_secret, v11_access_token, v11_access_token_secret))
@@ -253,10 +253,10 @@ def do_scoring(workRow):
     exploded_puzzle_data["expressionOverride"] = expression
 
     responses = [
-        "Grooooovy! You're on the leaderboard for %s with a time of %f (speedy!!) and a character count of %d! Also, we made you an *awesome* video of your run!",
-        "Woohoo!! You're on the leaderboard for %s with a time of %f (vroom vroom!) and a character count of %d! Check out this super cool video of your run!",
-        "🥳🥳🥳 You're on the %s leaderboard with a super speedy time of %f and a character count of %d! We even made this groovy video of your run!",
-        "Cowabunga! You've made it onto the %s leaderboard! You got an unbelievably fast time of %f (WOW!) and a character count of %d! There's even a super cool video of your run!",
+        "Grooooovy! You're on the leaderboard for %s with a time of %f (speedy!!) and a character count of %d! Also, we made you an *awesome* video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
+        "Woohoo!! You're on the leaderboard for %s with a time of %f (vroom vroom!) and a character count of %d! Check out this super cool video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
+        "🥳🥳🥳 You're on the %s leaderboard with a super speedy time of %f and a character count of %d! We even made this groovy video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
+        "Cowabunga! You've made it onto the %s leaderboard! You got an unbelievably fast time of %f (WOW!) and a character count of %d! There's even a super cool video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
     ]
 
     # test code
@@ -288,7 +288,7 @@ def do_scoring(workRow):
                 msg = "Sorry, that submission takes longer than 30 seconds to evaluate, so we had to disqualify it. :( Try again with a new solution!"
                 post_tweet(msg, tweet_id)
             else:
-                msg = random.choice(responses) % (score_data["level"], score_data["time"], score_data["charCount"])
+                msg = random.choice(responses) % (score_data["level"], score_data["time"], score_data["charCount"], leaderboard_uri, score_data["playURL"])
                 post_tweet(msg, tweet_id, upload_media_to_twitter(score_data["gameplay"], "video/mp4"))
         except Exception as e:
             print("Error posting tweet response...")
