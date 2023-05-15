@@ -249,7 +249,7 @@ elif os.environ["PROC_TYPE"] == "web":
     threading.Thread(target=start_server).start()
 elif os.environ["PROC_TYPE"] == "worker":
     print("PROC_TYPE=worker, starting polling...")
-    threading.Thread(target=start_server).start()
+    threading.Thread(target=start_work_queue_polling).start()
     threading.Thread(target=start_refresh_token_polling).start()
     threading.Thread(target=start_submission_tweet_polling).start()
 else:
