@@ -138,6 +138,14 @@ def do_scoring(work_row):
         "Cowabunga! You've made it onto the %s leaderboard! You got an unbelievably fast time of %f (WOW!) and a character count of %d! There's even a super cool video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
     ]
 
+    # update messages if copy update is needed
+    # thread_messages = [
+    #    "Grooooovy! You're on the leaderboard for %s with a time of %f (speedy!!) and a character count of %d! Also, we made you an *awesome* video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
+    #    "Woohoo!! You're on the leaderboard for %s with a time of %f (vroom vroom!) and a character count of %d! Check out this super cool video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
+    #    "🥳🥳🥳 You're on the %s leaderboard with a super speedy time of %f and a character count of %d! We even made this groovy video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
+    #    "Cowabunga! You've made it onto the %s leaderboard! You got an unbelievably fast time of %f (WOW!) and a character count of %d! There's even a super cool video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
+    # ]
+
     submission_url = url_prefix + "?" + lztranscoder.compressToBase64(json.dumps(exploded_puzzle_data))
 
     # See if we have already scored this submission
@@ -164,8 +172,18 @@ def do_scoring(work_row):
             msg = random.choice(responses) % (
                 score_data["level"], score_data["time"], score_data["charCount"], leaderboard_uri,
                 score_data["playURL"])
+
+            message = "We've just gotten a new submission in from {}! Can you beat them?".format(player_name)
             media_ids = twitter_client.upload_media(score_data["gameplay"], "video/mp4")
+            tweet_id = persistence.get("twitter_%s" % puzzle_id)
             twitter_client.post_tweet(msg, tweet_id, media_ids)
+
+            # Post tweet in original tweet thread
+            # thread_msg = random.choice(responses) % (
+            #    score_data["level"], score_data["time"], score_data["charCount"], leaderboard_uri,
+            #    score_data["playURL"])
+
+            twitter_client.post_tweet(message, persistence.get("twitter_%s" % puzzle_id), media_ids)
 
         # Mark this job as complete
         persistence.complete_queued_work(tweet_id)
