@@ -133,10 +133,10 @@ async def do_scoring(work_row):
     exploded_puzzle_data["expressionOverride"] = expression
 
     responses = [
-        "Grooooovy! You're on the leaderboard for %s with a time of %f (speedy!!) and a character count of %d! Also, we made you an *awesome* video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
-        "Woohoo!! You're on the leaderboard for %s with a time of %f (vroom vroom!) and a character count of %d! Check out this super cool video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
-        "🥳🥳🥳 You're on the %s leaderboard with a super speedy time of %f and a character count of %d! We even made this groovy video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
-        "Cowabunga! You've made it onto the %s leaderboard! You got an unbelievably fast time of %f (WOW!) and a character count of %d! There's even a super cool video of your run!\r\nCheck your spot on the leaderboards here: %s\r\nRemix their solution: %s",
+        "Grooooovy! You're on the leaderboard for %s with a time of %f (speedy!!) and a character count of %d! Also, we made you an *awesome* video of your run!\r\nCheck your spot on the leaderboards here: %s",
+        "Woohoo!! You're on the leaderboard for %s with a time of %f (vroom vroom!) and a character count of %d! Check out this super cool video of your run!\r\nCheck your spot on the leaderboards here: %s",
+        "🥳🥳🥳 You're on the %s leaderboard with a super speedy time of %f and a character count of %d! We even made this groovy video of your run!\r\nCheck your spot on the leaderboards here: %s",
+        "Cowabunga! You've made it onto the %s leaderboard! You got an unbelievably fast time of %f (WOW!) and a character count of %d! There's even a super cool video of your run!\r\nCheck your spot on the leaderboards here: %s",
     ]
 
     # update messages if copy update is needed
@@ -152,6 +152,7 @@ async def do_scoring(work_row):
     # See if we have already scored this submission
     cached_result = persistence.get_submission_with_url(submission_url)
     if cached_result is not None:
+        print("Invalid (duplicate) submission...")
         persistence.complete_queued_work(tweet_id)
         notify_user_highscore_already_exists(player_name, tweet_id, cached_result)
         return
@@ -166,30 +167,37 @@ async def do_scoring(work_row):
         score_data = json.loads(response.text)
         persistence.add_leaderboard_entry(player_name, score_data)
 
-        if "time" not in score_data or score_data["time"] is None:
-            msg = "Sorry, that submission takes longer than 30 seconds to evaluate, so we had to disqualify it. :( Try again with a new solution!"
-            twitter_client.post_tweet(msg, tweet_id)
-        else:
-            msg = random.choice(responses) % (
-                score_data["level"], score_data["time"], score_data["charCount"], leaderboard_uri,
-                score_data["playURL"])
-
-            message = "We've just gotten a new submission in from {}! Can you beat them?".format(player_name)
-            media_ids = twitter_client.upload_media(score_data["gameplay"], "video/mp4")
-            tweet_id = persistence.get("twitter_%s" % puzzle_id)
-            twitter_client.post_tweet(msg, tweet_id, media_ids)
-
-            # Post tweet in original tweet thread
-            # thread_msg = random.choice(responses) % (
-            #    score_data["level"], score_data["time"], score_data["charCount"], leaderboard_uri,
-            #    score_data["playURL"])
-
-            twitter_client.post_tweet(message, persistence.get("twitter_%s" % puzzle_id), media_ids)
-
         # Mark this job as complete
         persistence.complete_queued_work(tweet_id)
 
+        if "time" not in score_data or score_data["time"] is None:
+            print("Invalid (>30s) submission...")
+            msg = "Sorry, that submission takes longer than 30 seconds to evaluate, so we had to disqualify it. :( Try again with a new solution!"
+            twitter_client.post_tweet(msg, tweet_id)
+        else:
+            print("Successful submission!")
+            msg = random.choice(responses) % (
+                score_data["level"], score_data["time"], score_data["charCount"], leaderboard_uri)
+
+            try:
+                # Upload video...
+                media_ids = twitter_client.upload_media(score_data["gameplay"], "video/mp4")
+
+                # Respond to the submission thread
+                print("Replying to submission thread")
+                twitter_client.post_tweet(msg, tweet_id, media_ids)
+
+                # Post on the original thread challenging others
+                original_thread_id = persistence.get_config("twitter_%s" % puzzle_id, None)
+                if original_thread_id is not None:
+                    print("Replying to original thread (%s)" % (original_thread_id))
+                    message = "We've just gotten a new submission in from {}! Can you beat them?".format(player_name)
+                    twitter_client.post_tweet(message, original_thread_id, media_ids, use_primary_bot=True)
+            except Exception as e:
+                print(e)
+
     except Exception as e:
+        print(e)
         # We need to eventually give up...
         if attempts >= 3:
             notify_user_unknown_error(player_name, tweet_id)
@@ -206,7 +214,9 @@ async def process_work_queue_async():
         tasks = []
         for work in queued_work:
             tasks.append(do_scoring(work))
+        print("PRE asyncio.gather")
         await asyncio.gather(*tasks)
+        print("POST asyncio.gather")
 
     except Exception as e:
         print("Exception: %s" % e)

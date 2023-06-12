@@ -51,7 +51,7 @@ class TwitterClient:
             file.close()
             media = self.__get_next_v11_client().chunked_upload(filename, file_type=file_type,
                                                                 additional_owners=self.get_all_owners())
-            return media.media_id_string
+            return [media.media_id_string]
         except Exception as e:
             print(e)
         finally:
