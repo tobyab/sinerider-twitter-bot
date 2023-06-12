@@ -2,6 +2,7 @@ import os
 import json
 import random
 import sys
+import asyncio
 import requests
 import polling
 from flask import Flask, request, Response
@@ -96,7 +97,7 @@ def notify_user_invalid_puzzle(player_name, tweet_id):
     twitter_client.post_tweet(error_message, tweet_id)
 
 
-def do_scoring(work_row):
+async def do_scoring(work_row):
     """ Perform scoring for an item on the work queue
     :param workRow: A work item that needs to be scored and responded to
     :return: N/A
@@ -194,17 +195,18 @@ def do_scoring(work_row):
             notify_user_unknown_error(player_name, tweet_id)
             persistence.complete_queued_work(tweet_id)
 
-
 def process_work_queue():
+    asyncio.run(process_work_queue_async())
+
+async def process_work_queue_async():
     """ Attempt to process everything in the work queue. """
     try:
         print("Processing work queue")
         queued_work = persistence.get_all_queued_work()
-        for workRow in queued_work:
-            try:
-                do_scoring(workRow)
-            except Exception as e:
-                print(str(e))
+        tasks = []
+        for work in queued_work:
+            tasks.append(do_scoring(work))
+        await asyncio.gather(*tasks)
 
     except Exception as e:
         print("Exception: %s" % e)
