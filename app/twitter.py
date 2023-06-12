@@ -1,4 +1,5 @@
 import re
+import sys
 import traceback
 
 import tweepy
@@ -51,7 +52,7 @@ class TwitterClient:
             file.close()
             media = self.__get_next_v11_client().chunked_upload(filename, file_type=file_type,
                                                                 additional_owners=self.get_all_owners())
-            return media.media_id_string
+            return [media.media_id_string]
         except Exception as e:
             print(e)
         finally:
@@ -90,7 +91,7 @@ class TwitterClient:
         start_time = yesterday if since_id is None else None
 
         while True:
-            response = self.__get_next_v20_client(False).search_recent_tweets("#testrider puzzle_",
+            response = self.__get_next_v20_client(False).search_recent_tweets("My solution for the #sinerider puzzle of the day",
                                                                               expansions=expansions,
                                                                               tweet_fields=tweet_fields,
                                                                               user_fields=user_fields,
@@ -137,10 +138,12 @@ class TwitterClient:
             print("Detected bot tweet, ignoring...")
             return "We don't respond to bots"
 
-        match = re.search(r"#testrider\s(?P<puzzle_id>puzzle_\d+)\s(?P<equation>.*)", text)
+        match = re.search(
+            r"#(?P<puzzle_id>puzzle_[0-9]+)(?P<middle>.*characters)(?P<expression>.*)(Try solving it yourself: .+)",
+            text, re.MULTILINE | re.DOTALL)
         if match:
             puzzle_id = match.group("puzzle_id")
-            expression = match.group("equation")
+            expression = match.group("expression").strip()
 
             return {
                 "author_id": tweet["author_id"],
