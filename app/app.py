@@ -231,7 +231,7 @@ def start_work_queue_polling():
 
 def start_refresh_token_polling():
     """ Attempts to refresh all user tokens every 5 minutes. """
-    polling.poll(twitter_client.refresh_all_tokens, step=5 * 60, poll_forever=True)
+    polling.poll(twitter_client.refresh_all_tokens, step=60, poll_forever=True)
 
 
 def start_submission_tweet_polling():
