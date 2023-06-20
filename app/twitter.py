@@ -69,7 +69,11 @@ class TwitterClient:
         """ Forces all users managed by this module to refresh their authentication tokens.  This needs to happen
         periodically, and should be done no less than 2 hours. """
         for config in self.v20_creds:
-            self.__refresh(config)
+            try:
+                self.__refresh(config)
+            except Exception as e:
+                print("Failed refreshing tokens: %s" % (str(e)))
+
 
     def __find_submissions_since(self, since_id=None):
         """ Returns all submissions posted since the last (newest) tweet we've processed.  Does the work here to
