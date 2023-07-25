@@ -121,7 +121,7 @@ class Persistence:
         else:
             self.config_table.update(existing_config["id"], {"value": value})
 
-    def add_leaderboard_entry(self, playerName, scoringPayload):
+    def add_leaderboard_entry(self, playerName, scoringPayload, submission_url):
         """ Adds a leaderboard entry to the leaderboard table
         :param playerName: The name of the player
         :param scoringPayload: The payload received from the scoring service
@@ -131,7 +131,7 @@ class Persistence:
         gameplayUrl = scoringPayload["gameplay"]
         level = scoringPayload["level"]
         charCount = scoringPayload["charCount"]
-        playURL = scoringPayload["playURL"]
+        playURL = submission_url
         time = scoringPayload["time"]
         self.leaderboard_table.create(
             {"expression": expression, "time": time, "level": level, "playURL": playURL, "charCount": charCount,

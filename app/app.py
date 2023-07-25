@@ -3,6 +3,8 @@ import json
 import random
 import sys
 import asyncio
+import traceback
+
 import requests
 import polling
 from flask import Flask, request, Response
@@ -165,7 +167,7 @@ async def do_scoring(work_row):
             persistence.complete_queued_work(tweet_id)
 
         score_data = json.loads(response.text)
-        persistence.add_leaderboard_entry(player_name, score_data)
+        persistence.add_leaderboard_entry(player_name, score_data, submission_url)
 
         # Mark this job as complete
         persistence.complete_queued_work(tweet_id)
@@ -197,7 +199,8 @@ async def do_scoring(work_row):
                 print(e)
 
     except Exception as e:
-        print(e)
+        traceback.print_exc()
+
         # We need to eventually give up...
         if attempts >= 3:
             notify_user_unknown_error(player_name, tweet_id)
@@ -231,7 +234,7 @@ def start_work_queue_polling():
 
 def start_refresh_token_polling():
     """ Attempts to refresh all user tokens every 5 minutes. """
-    polling.poll(twitter_client.refresh_all_tokens, step=5 * 60, poll_forever=True)
+    polling.poll(twitter_client.refresh_all_tokens, step=60, poll_forever=True)
 
 
 def start_submission_tweet_polling():
