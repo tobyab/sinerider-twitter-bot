@@ -3,6 +3,8 @@ import json
 import random
 import sys
 import asyncio
+import traceback
+
 import requests
 import polling
 from flask import Flask, request, Response
@@ -165,7 +167,7 @@ async def do_scoring(work_row):
             persistence.complete_queued_work(tweet_id)
 
         score_data = json.loads(response.text)
-        persistence.add_leaderboard_entry(player_name, score_data)
+        persistence.add_leaderboard_entry(player_name, score_data, submission_url)
 
         # Mark this job as complete
         persistence.complete_queued_work(tweet_id)
@@ -197,7 +199,8 @@ async def do_scoring(work_row):
                 print(e)
 
     except Exception as e:
-        print(e)
+        traceback.print_exc()
+
         # We need to eventually give up...
         if attempts >= 3:
             notify_user_unknown_error(player_name, tweet_id)
