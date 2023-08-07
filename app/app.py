@@ -4,16 +4,18 @@ import random
 import sys
 import asyncio
 import traceback
+import time
 
 import requests
 import polling
-from flask import Flask, request, Response
+from flask import Flask, request, Response, g
 from dotenv import load_dotenv
 from flask_auth import login_required
 import threading
 import lzstring
 from persistence import Persistence
 from twitter import TwitterClient
+from metrics import metrics
 
 app = Flask(__name__)
 app.secret_key = os.urandom(50)
@@ -29,6 +31,22 @@ persistence = Persistence(os.environ["AIRTABLE_API_KEY"], os.environ["AIRTABLE_B
 twitter_client = TwitterClient(persistence, json.loads(os.environ["TWITTER_CREDENTIALS_JSON"]),
                                os.environ["REDIRECT_URI"], TESTING)
 
+
+@app.before_request
+def get_metrics():
+    g.start = time.time()
+    g.method = request.method
+    g.url = request.url
+
+@app.after_request
+def log_metrics(response: Response):
+    diff = time.time() - g.start
+    stat = (g.method + '/' + g.url.split('/')[1]).lower().replace("/", "_")
+    http_code = response.status_code
+    timing_stat_key = f'http.response.{stat}'
+    code_stat_key = f'http.response.{stat}.{http_code}'
+    metrics.timing(timing_stat_key, diff)
+    metrics.incr(code_stat_key, 1)
 
 @app.route("/publishPuzzle", methods=["POST"])
 @login_required
