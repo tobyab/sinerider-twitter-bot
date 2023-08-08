@@ -24,3 +24,4 @@ tweepy==4.13.0
 urllib3==1.26.15
 Werkzeug==2.2.3
 zipp==3.15.0
+statsd==4.0.1
