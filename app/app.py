@@ -41,12 +41,14 @@ def get_metrics():
 @app.after_request
 def log_metrics(response: Response):
     diff = time.time() - g.start
-    stat = (g.method + '/' + g.url.split('/')[1]).lower().replace("/", "_")
+    stat = (g.method + '/' + g.url.split('/')[3]).lower().replace("/", "_")
     http_code = response.status_code
     timing_stat_key = f'http.response.{stat}'
     code_stat_key = f'http.response.{stat}.{http_code}'
     metrics.timing(timing_stat_key, diff)
     metrics.incr(code_stat_key, 1)
+
+    return response
 
 @app.route("/publishPuzzle", methods=["POST"])
 @login_required

@@ -1,5 +1,8 @@
 import os
 import statsd
+from dotenv import load_dotenv
+
+load_dotenv()
 
 environment = os.environ.get("PYTHON_ENV")
 graphite = os.environ.get("GRAPHITE")
