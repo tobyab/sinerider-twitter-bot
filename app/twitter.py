@@ -1,5 +1,4 @@
 import re
-import sys
 import traceback
 
 import tweepy
@@ -7,6 +6,7 @@ import uuid
 import requests
 import os
 from datetime import datetime, timedelta
+from metrics import metrics
 
 
 class TwitterClient:
@@ -45,6 +45,7 @@ class TwitterClient:
         """
         filename = "./%s-gameplay.%s" % (uuid.uuid4(), file_type.split("/")[1])
         try:
+            metrics.incr("upload.media.attempt", 1)
             r = requests.get(media_uri, allow_redirects=True)
             file = open(filename, 'wb')
             file.write(r.content)
@@ -52,8 +53,10 @@ class TwitterClient:
             file.close()
             media = self.__get_next_v11_client().chunked_upload(filename, file_type=file_type,
                                                                 additional_owners=self.get_all_owners())
+            metrics.incr("upload.media.success", 1)
             return [media.media_id_string]
         except Exception as e:
+            metrics.incr("error.upload_media_failure", 1)
             print(e)
         finally:
             if os.path.exists(filename):
@@ -70,8 +73,11 @@ class TwitterClient:
         periodically, and should be done no less than 2 hours. """
         for config in self.v20_creds:
             try:
+                metrics.incr("tokens.refresh.attempt", 1)
                 self.__refresh(config)
+                metrics.incr("tokens.refresh.success", 1)
             except Exception as e:
+                metrics.incr("tokens.refresh.failure", 1)
                 print("Failed refreshing tokens: %s" % (str(e)))
 
 
@@ -168,15 +174,20 @@ class TwitterClient:
         newest_tweet_id = self.persistence.get_config("newest_twitter_id", None)
 
         try:
+            metrics.incr("twitter.submissions.query.attempt", 1)
             submissions = self.__find_submissions_since(newest_tweet_id)
             print("New submissions: %d" % (len(submissions)))
+
             for submission in submissions:
                 try:
+                    metrics.incr("twitter.submissions.query.result", 1)
                     self.persistence.queue_work(str(submission["id"]), submission["author_username"],
                                                 submission["puzzle_id"], submission["expression"])
                 except Exception as e:
+                    metrics.incr("error.twitter_submissions_exception", 1)
                     traceback.print_exc()
         except Exception as e:
+            metrics.incr("error.twitter_submissions_exception", 1)
             traceback.print_exc()
 
     def get_all_owners(self):

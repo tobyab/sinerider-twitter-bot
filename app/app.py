@@ -76,6 +76,7 @@ def on_publish_puzzle():
         persistence.set_config("twitter_%s" % (puzzle_id), tweet_id)
         return Response(status=200)
     except Exception as e:
+        metrics.incr("error.publish_puzzle", 1)
         error_message = str(e).replace('\n', ' ').replace('\r', '')
         print("Failed to publish puzzle: message=%s" % (error_message))
         resp = Response("{'message':'%s'}" % error_message, status=500, mimetype='application/json')
@@ -88,6 +89,7 @@ def notify_user_unknown_error(player_name, tweet_id):
     :param tweetId: The ID of the tweet they submitted their answer with
     """
     error_message = "Sorry, I encountered an error scoring that submission :("
+    metrics.incr("error.unknown", 1)
     twitter_client.post_tweet(error_message, tweet_id)
 
 
@@ -116,6 +118,7 @@ def notify_user_invalid_puzzle(player_name, tweet_id):
     """
     print("We should notify user %s of invalid puzzle on tweet with ID: %s" % (player_name, tweet_id))
     error_message = "I'm terribly sorry, but I'm not aware of a puzzle with that name!"
+    metrics.incr("error.invalid_puzzle", 1)
     twitter_client.post_tweet(error_message, tweet_id)
 
 
@@ -219,6 +222,7 @@ async def do_scoring(work_row):
                 print(e)
 
     except Exception as e:
+        metrics.incr("error.scoring_failure", 1)
         traceback.print_exc()
 
         # We need to eventually give up...
@@ -233,15 +237,18 @@ async def process_work_queue_async():
     """ Attempt to process everything in the work queue. """
     try:
         print("Processing work queue")
+        metrics.incr("workqueue.start", 1)
         queued_work = persistence.get_all_queued_work()
         tasks = []
         for work in queued_work:
+            metrics.incr("workqueue.work", 1)
             tasks.append(do_scoring(work))
         print("PRE asyncio.gather")
         await asyncio.gather(*tasks)
         print("POST asyncio.gather")
 
     except Exception as e:
+        metrics.incr("error.workqueue", 1)
         print("Exception: %s" % e)
     print("Work queue end")
     sys.stdout.flush()
