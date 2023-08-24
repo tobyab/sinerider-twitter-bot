@@ -133,6 +133,13 @@ async def do_scoring(work_row):
     player_name = work_row["fields"]["twitterHandle"]
     tweet_id = work_row["fields"]["tweetId"]
 
+    existing_tweetId = persistence.get_tweetId_data(tweet_id)
+
+    if existing_tweetId:
+        # if tweet_id already exists in the airtable
+        notify_user_invalid_puzzle(player_name, tweet_id)
+        return
+
     # Keep track of how many times we've attempted to score this work item
     attempts = persistence.increment_attempts_queued_work(tweet_id)
 

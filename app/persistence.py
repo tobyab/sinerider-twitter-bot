@@ -144,6 +144,13 @@ class Persistence:
         """
         return self.get_one_row(self.puzzle_table, "id", puzzle_id)
 
+    def get_tweetId_data(self, tweet_id):
+        """ Returns the data associated with a given tweetId
+        :param tweet_id: The ID of the tweet
+        :return: Tweet data or None
+        """
+        return self.get_one_row(self.work_queue_table, "tweetId", tweet_id)
+
     def get_submission_with_url(self, submission_url):
         """ Returns an entry from the leaderboard table that matches a given URL.  This is mainly used for checking
             for duplicate submissions.
