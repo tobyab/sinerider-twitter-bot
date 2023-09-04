@@ -88,20 +88,7 @@ class Persistence:
         """
         print("Marking work item (tweetid: %s) complete" % (tweet_id))
         row = self.get_one_row(self.work_queue_table, "tweetId", tweet_id)
-        response = self.work_queue_table.update(row["id"], {"completed": True})
-        print()
-        print("INVALID PUZZLE && -> ", response)
-        print()
-
-    def increment_attempts_queued_work(self, tweet_id):
-        """ Increments the amount of times a piece of queued work as been attempted to be processed.
-        :param tweet_id: The tweet ID of the associated completed work.
-        :return: The newly-incremented number of attempts.
-        """
-        row = self.get_one_row(self.work_queue_table, "tweetId", tweet_id)
-        attempts = row["fields"]["attempts"] + 1
-        self.work_queue_table.update(row["id"], {"attempts": attempts})
-        return attempts
+        self.work_queue_table.update(row["id"], {"completed": True})
 
     def increment_attempts_queued_work(self, tweet_id):
         """ Increments the amount of times a piece of queued work as been attempted to be processed.
@@ -154,3 +141,18 @@ class Persistence:
         :return: Leaderboard data associated with that URL, or None
         """
         return self.get_one_row(self.leaderboard_table, "playURL", submission_url)
+
+    def remove_duplicates(self):
+        submissions_dict = {}
+        for submission in self.get_all_queued_work():
+            key = submission["fields"]["tweetId"]
+            item = submissions_dict.get(key, None)
+            
+            if item is None:
+                submissions_dict[key] = submission
+            else:
+                if submission["fields"]["completed"]:
+                    self.work_queue_table.delete(item["id"])
+                    submissions_dict[key] = submission
+                else:
+                    self.work_queue_table.delete(submission["id"])
