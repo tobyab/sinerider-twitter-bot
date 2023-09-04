@@ -274,7 +274,7 @@ def start_remove_duplicates_polling():
     """
         Poll airtable every 30 minutes to remove duplicate submissions 
     """
-    polling.poll(persistence.remove_duplicates, step=60*30, poll_forever=True)
+    polling.poll(persistence.remove_duplicate_incomplete_submissions, step=60*30, poll_forever=True)
 
 
 if AUTHORIZE_MANUALLY:

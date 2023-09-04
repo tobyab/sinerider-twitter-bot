@@ -142,17 +142,23 @@ class Persistence:
         """
         return self.get_one_row(self.leaderboard_table, "playURL", submission_url)
 
-    def remove_duplicates(self):
+    def remove_duplicate_incomplete_submissions(self):
+        """
+            Will delete duplicate submissions from airtable.
+            If one of the duplicates has been marked as completed, it won't be deleted
+        """
         submissions_dict = {}
         for submission in self.get_all_queued_work():
             key = submission["fields"]["tweetId"]
-            item = submissions_dict.get(key, None)
+            existing_submission = submissions_dict.get(key, None)
             
-            if item is None:
+            if existing_submission is None:
                 submissions_dict[key] = submission
             else:
                 if submission["fields"]["completed"]:
-                    self.work_queue_table.delete(item["id"])
-                    submissions_dict[key] = submission
+                    # delete existing item from dict if not completed
+                    if not existing_submission["fields"]["completed"]:
+                        self.work_queue_table.delete(existing_submission["id"])
+                        submissions_dict[key] = submission
                 else:
                     self.work_queue_table.delete(submission["id"])
