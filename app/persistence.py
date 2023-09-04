@@ -88,7 +88,10 @@ class Persistence:
         """
         print("Marking work item (tweetid: %s) complete" % (tweet_id))
         row = self.get_one_row(self.work_queue_table, "tweetId", tweet_id)
-        self.work_queue_table.update(row["id"], {"completed": True})
+        response = self.work_queue_table.update(row["id"], {"completed": True})
+        print()
+        print("INVALID PUZZLE && -> ", response)
+        print()
 
     def increment_attempts_queued_work(self, tweet_id):
         """ Increments the amount of times a piece of queued work as been attempted to be processed.
