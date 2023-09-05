@@ -39,9 +39,11 @@ class Persistence:
         :param expression: The sinerider graph expression in the submission
         """
         print("queueing: %s %s %s %s" % (tweetId, twitterHandle, puzzleId, expression))
-        self.work_queue_table.create(
-            {"tweetId": tweetId, "twitterHandle": twitterHandle, "puzzleId": puzzleId, "expression": expression,
-             "completed": False, "attempts": 0})
+        existing_submission = self.get_one_row(self.work_queue_table, "tweetId", tweetId)
+        if existing_submission is None:
+            self.work_queue_table.create(
+                {"tweetId": tweetId, "twitterHandle": twitterHandle, "puzzleId": puzzleId, "expression": expression,
+                "completed": False, "attempts": 0})
 
     def get_all_queued_work(self):
         """ Returns all queued non-completed work in the work queue (submissions to be scored and responded to)
