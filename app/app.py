@@ -270,11 +270,11 @@ def start_submission_tweet_polling():
         is 60 per 15 minutes - see https://developer.twitter.com/en/docs/twitter-api/rate-limits)"""
     polling.poll(twitter_client.queue_new_tweet_submissions, step=16, poll_forever=True)
 
-def start_remove_duplicates_polling():
+def start_duplicates_polling():
     """
         Poll airtable every 30 minutes to remove duplicate submissions 
     """
-    polling.poll(persistence.remove_duplicate_incomplete_submissions, step=60*30, poll_forever=True)
+    polling.poll(persistence.poll_duplicate_submissions, step=60*30, poll_forever=True)
 
 
 if AUTHORIZE_MANUALLY:
@@ -310,7 +310,7 @@ if "PROC_TYPE" not in os.environ:
     threading.Thread(target=start_work_queue_polling).start()
     threading.Thread(target=start_refresh_token_polling).start()
     threading.Thread(target=start_submission_tweet_polling).start()
-    threading.Thread(target=start_remove_duplicates_polling).start()
+    threading.Thread(target=start_duplicates_polling).start()
 elif os.environ["PROC_TYPE"] == "web":
     print("PROC_TYPE=web, starting server...")
     threading.Thread(target=start_server).start()
@@ -319,6 +319,6 @@ elif os.environ["PROC_TYPE"] == "worker":
     threading.Thread(target=start_work_queue_polling).start()
     threading.Thread(target=start_refresh_token_polling).start()
     threading.Thread(target=start_submission_tweet_polling).start()
-    threading.Thread(target=start_remove_duplicates_polling).start()
+    threading.Thread(target=start_duplicates_polling).start()
 else:
     print("INVALID WORKER TYPE")

@@ -1,5 +1,6 @@
 from pyairtable import Table
 from pyairtable.formulas import EQUAL, AND, IF, FIELD, to_airtable_value
+from metrics import metrics
 
 
 class Persistence:
@@ -44,6 +45,7 @@ class Persistence:
             self.work_queue_table.create(
                 {"tweetId": tweetId, "twitterHandle": twitterHandle, "puzzleId": puzzleId, "expression": expression,
                 "completed": False, "attempts": 0})
+        else: print(f"Dupicate submission with id {tweetId}... Skipping!")
 
     def get_all_queued_work(self):
         """ Returns all queued non-completed work in the work queue (submissions to be scored and responded to)
@@ -144,23 +146,25 @@ class Persistence:
         """
         return self.get_one_row(self.leaderboard_table, "playURL", submission_url)
 
-    def remove_duplicate_incomplete_submissions(self):
+    def poll_duplicate_submissions(self):
         """
             Will delete duplicate submissions from airtable.
             If one of the duplicates has been marked as completed, it won't be deleted
         """
         submissions_dict = {}
-        for submission in self.get_all_queued_work():
+        for submission in self.work_queue_table.all():
             key = submission["fields"]["tweetId"]
             existing_submission = submissions_dict.get(key, None)
             
             if existing_submission is None:
                 submissions_dict[key] = submission
             else:
-                if submission["fields"]["completed"]:
-                    # delete existing item from dict if not completed
-                    if not existing_submission["fields"]["completed"]:
-                        self.work_queue_table.delete(existing_submission["id"])
-                        submissions_dict[key] = submission
-                else:
-                    self.work_queue_table.delete(submission["id"])
+                metrics.incr("errors.duplicate_submission", 1)
+                print("Duplicate submission here...")
+                # if submission["fields"]["completed"]:
+                #     # delete existing item from dict if not completed
+                #     if not existing_submission["fields"]["completed"]:
+                #         self.work_queue_table.delete(existing_submission["id"])
+                #         submissions_dict[key] = submission
+                # else:
+                #     self.work_queue_table.delete(submission["id"])
