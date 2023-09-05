@@ -46,6 +46,16 @@ class Persistence:
                 {"tweetId": tweetId, "twitterHandle": twitterHandle, "puzzleId": puzzleId, "expression": expression,
                 "completed": False, "attempts": 0})
         else: print(f"Dupicate submission with id {tweetId}... Skipping!")
+    
+    def increment_attempts_queued_work(self, tweet_id):
+        """ Increments the amount of times a piece of queued work as been attempted to be processed.
+        :param tweet_id: The tweet ID of the associated completed work.
+        :return: The newly-incremented number of attempts.
+        """
+        row = self.get_one_row(self.work_queue_table, "tweetId", tweet_id)
+        attempts = row["fields"]["attempts"] + 1
+        self.work_queue_table.update(row["id"], {"attempts": attempts})
+        return attempts
 
     def get_all_queued_work(self):
         """ Returns all queued non-completed work in the work queue (submissions to be scored and responded to)
